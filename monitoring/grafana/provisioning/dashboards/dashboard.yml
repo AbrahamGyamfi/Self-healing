@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: TechStream
+    orgId: 1
+    folder: TechStream
+    folderUid: techstream
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

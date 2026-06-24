@@ -1,0 +1,110 @@
+groups:
+  - name: golden_signals
+    interval: 30s
+    rules:
+
+      # -----------------------------------------------------------------------
+      # ERRORS  – error rate > 5 % over last 2 minutes
+      # -----------------------------------------------------------------------
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_errors_total[2m])) by (job)
+            /
+            sum(rate(http_requests_total[2m])) by (job)
+          ) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          signal: errors
+        annotations:
+          summary: "High HTTP error rate on {{ $labels.job }}"
+          description: >
+            Error rate is {{ $value | humanizePercentage }} (threshold 5 %).
+            Automated remediation will be attempted.
+          runbook: "https://wiki.techstream.io/runbooks/high-error-rate"
+
+      # -----------------------------------------------------------------------
+      # LATENCY  – P99 latency > 1 s
+      # -----------------------------------------------------------------------
+      - alert: HighLatencyP99
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(http_request_duration_seconds_bucket{endpoint="/api/data"}[5m])) by (le)
+          ) > 1.0
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          signal: latency
+        annotations:
+          summary: "High P99 latency on /api/data"
+          description: "P99 latency is {{ $value | humanizeDuration }} (threshold 1 s)."
+
+      # -----------------------------------------------------------------------
+      # SATURATION  – CPU > 80 %
+      # -----------------------------------------------------------------------
+      - alert: HighCpuSaturation
+        expr: process_cpu_percent > 80
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          signal: saturation
+        annotations:
+          summary: "CPU saturation on TechStream API"
+          description: "CPU usage is {{ $value }}% (threshold 80%)."
+
+      # -----------------------------------------------------------------------
+      # SATURATION  – Memory > 85 %
+      # -----------------------------------------------------------------------
+      - alert: HighMemorySaturation
+        expr: |
+          (
+            process_memory_bytes
+            /
+            node_memory_MemTotal_bytes
+          ) > 0.85
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          signal: saturation
+        annotations:
+          summary: "Memory saturation on TechStream API"
+          description: "Memory utilisation is {{ $value | humanizePercentage }}."
+
+      # -----------------------------------------------------------------------
+      # TRAFFIC  – requests/s drop > 80 % (potential crash)
+      # -----------------------------------------------------------------------
+      - alert: TrafficDrop
+        expr: |
+          (
+            sum(rate(http_requests_total[2m])) by (job)
+            < 0.2 * sum(rate(http_requests_total[10m] offset 5m)) by (job)
+          )
+          and sum(rate(http_requests_total[10m] offset 5m)) by (job) > 1
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          signal: traffic
+        annotations:
+          summary: "Significant traffic drop on {{ $labels.job }}"
+          description: >
+            Current RPS is {{ $value }}. Possible application crash or
+            upstream routing issue.
+
+  - name: infrastructure
+    rules:
+      - alert: AppContainerDown
+        expr: up{job="techstream_api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "TechStream API is unreachable"
+          description: "Prometheus cannot scrape the /metrics endpoint."
