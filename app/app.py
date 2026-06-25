@@ -3,7 +3,7 @@ import random
 import threading
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import psutil
 from prometheus_client import (
     Counter, Histogram, Gauge,
@@ -11,6 +11,7 @@ from prometheus_client import (
 )
 
 app = Flask(__name__)
+_START_TIME = time.time()
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics  (Golden Signals)
@@ -91,12 +92,81 @@ def _record_metrics(response):
 
 @app.route("/")
 def index():
+    return render_template("index.html")
+
+
+@app.route("/api/info")
+def api_info():
     return jsonify(
         service="TechStream API",
         version="1.0.0",
         chaos_active=chaos["enabled"],
         endpoints=["/health", "/api/data", "/api/users", "/chaos", "/metrics"],
     )
+
+
+@app.route("/api/signals")
+def api_signals():
+    """Aggregated Golden Signal snapshot for the dashboard."""
+    proc = psutil.Process()
+    cpu = proc.cpu_percent(interval=None)
+    mem = proc.memory_info().rss
+
+    # Calculate error rate and RPS from Prometheus registry counters
+    # (approximate from in-process counters since last scrape)
+    total = sum(
+        REQUEST_COUNT.labels(method=m, endpoint=e, status=s)._value.get()
+        for m in ["GET", "POST"]
+        for e in ["/api/data", "/api/users", "/health", "/chaos", "/chaos/reset", "/metrics", "/", "/api/signals", "/api/alerts"]
+        for s in ["200", "500", "404"]
+        if REQUEST_COUNT.labels(method=m, endpoint=e, status=s)._value.get() > 0
+    ) or 1
+
+    errors = sum(
+        ERROR_COUNTER.labels(endpoint=e)._value.get()
+        for e in ["/api/data", "/api/users", "/chaos"]
+    )
+
+    return jsonify(
+        errors=dict(
+            rate_pct=round(errors / total * 100, 2),
+        ),
+        latency=dict(
+            p50_ms=0,
+            p99_ms=0,
+        ),
+        traffic=dict(
+            rps=round(total / max((time.time() - _START_TIME), 1), 2),
+        ),
+        saturation=dict(
+            cpu_pct=round(cpu, 1),
+            memory_mb=round(mem / 1e6, 1),
+            active_requests=int(ACTIVE_REQUESTS._value.get()),
+        ),
+    )
+
+
+@app.route("/api/alerts")
+def api_alerts():
+    """Proxy Prometheus alert rules for the dashboard."""
+    import urllib.request as ur
+    import urllib.error
+    prometheus_url = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
+    try:
+        with ur.urlopen(f"{prometheus_url}/api/v1/rules", timeout=3) as resp:
+            data = __import__("json").loads(resp.read())
+        rules = []
+        for g in data.get("data", {}).get("groups", []):
+            for r in g.get("rules", []):
+                if r.get("type") == "alerting":
+                    rules.append(dict(
+                        name=r["name"],
+                        state=r.get("state", "inactive"),
+                        description=r.get("annotations", {}).get("summary", ""),
+                    ))
+        return jsonify(alerts=rules)
+    except Exception:
+        return jsonify(alerts=[])
 
 
 @app.route("/health")

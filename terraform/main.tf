@@ -24,93 +24,62 @@ provider "aws" {
 }
 
 # ---------------------------------------------------------------------------
-# Networking
+# Modules — wired in dependency order
 # ---------------------------------------------------------------------------
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-  tags = { Name = "${var.prefix}-vpc" }
+
+module "networking" {
+  source       = "./modules/networking"
+  prefix       = var.prefix
+  aws_region   = var.aws_region
+  your_ip_cidr = var.your_ip_cidr
+  alert_email  = var.alert_email
 }
 
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.prefix}-igw" }
+module "iam" {
+  source        = "./modules/iam"
+  prefix        = var.prefix
+  sns_topic_arn = module.networking.sns_topic_arn
 }
 
-resource "aws_subnet" "public_a" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "${var.aws_region}a"
-  map_public_ip_on_launch = true
-  tags                    = { Name = "${var.prefix}-public-a" }
+module "compute" {
+  source               = "./modules/compute"
+  prefix               = var.prefix
+  vpc_id               = module.networking.vpc_id
+  subnet_ids           = module.networking.subnet_ids
+  sg_id                = module.networking.sg_id
+  instance_profile_arn = module.iam.instance_profile_arn
+  ec2_instance_type    = var.ec2_instance_type
+  asg_min_size         = var.asg_min_size
+  asg_max_size         = var.asg_max_size
+  asg_desired_capacity = var.asg_desired_capacity
 }
 
-resource "aws_subnet" "public_b" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "${var.aws_region}b"
-  map_public_ip_on_launch = true
-  tags                    = { Name = "${var.prefix}-public-b" }
+module "lambda" {
+  source          = "./modules/lambda"
+  prefix          = var.prefix
+  lambda_role_arn = module.iam.lambda_role_arn
+  sns_topic_arn   = module.networking.sns_topic_arn
+  asg_name        = module.compute.asg_name
+  aws_region      = var.aws_region
 }
 
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-  tags = { Name = "${var.prefix}-public-rt" }
+module "eventbridge" {
+  source      = "./modules/eventbridge"
+  prefix      = var.prefix
+  lambda_arn  = module.lambda.lambda_arn
+  lambda_name = module.lambda.lambda_name
 }
 
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.public_a.id
-  route_table_id = aws_route_table.public.id
+module "monitoring" {
+  source               = "./modules/monitoring"
+  prefix               = var.prefix
+  sns_topic_arn        = module.networking.sns_topic_arn
+  asg_name             = module.compute.asg_name
+  remediation_rule_arn = module.eventbridge.remediation_rule_arn
 }
 
-resource "aws_route_table_association" "b" {
-  subnet_id      = aws_subnet.public_b.id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_security_group" "app" {
-  name        = "${var.prefix}-app-sg"
-  description = "TechStream application security group"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 5000
-    to_port     = 5000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "TechStream API"
-  }
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.your_ip_cidr]
-    description = "SSH"
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = { Name = "${var.prefix}-app-sg" }
-}
-
-# ---------------------------------------------------------------------------
-# SNS for notifications
-# ---------------------------------------------------------------------------
-resource "aws_sns_topic" "alerts" {
-  name = "${var.prefix}-alerts"
-}
-
-resource "aws_sns_topic_subscription" "email" {
-  count     = var.alert_email != "" ? 1 : 0
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = var.alert_email
+module "devops_guru" {
+  source        = "./modules/devops_guru"
+  enable        = var.enable_devops_guru
+  sns_topic_arn = module.networking.sns_topic_arn
 }

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# EC2 Instance Profile
+# EC2 Role
 # ---------------------------------------------------------------------------
 resource "aws_iam_role" "ec2_app" {
   name = "${var.prefix}-ec2-role"
@@ -29,7 +29,7 @@ resource "aws_iam_instance_profile" "app" {
 }
 
 # ---------------------------------------------------------------------------
-# Lambda execution role
+# Lambda Role
 # ---------------------------------------------------------------------------
 resource "aws_iam_role" "lambda_remediation" {
   name = "${var.prefix}-lambda-remediation-role"
@@ -56,33 +56,23 @@ resource "aws_iam_role_policy" "lambda_remediation_policy" {
     Statement = [
       {
         Effect = "Allow"
-        Action = [
-          "ssm:SendCommand",
-          "ssm:GetCommandInvocation",
-        ]
+        Action = ["ssm:SendCommand", "ssm:GetCommandInvocation"]
         Resource = "*"
       },
       {
         Effect = "Allow"
-        Action = [
-          "autoscaling:DescribeAutoScalingGroups",
-          "autoscaling:SetDesiredCapacity",
-        ]
+        Action = ["autoscaling:DescribeAutoScalingGroups", "autoscaling:SetDesiredCapacity"]
         Resource = "*"
       },
       {
         Effect = "Allow"
-        Action = [
-          "ec2:DescribeInstances",
-          "ec2:StopInstances",
-          "ec2:StartInstances",
-        ]
+        Action = ["ec2:DescribeInstances", "ec2:StopInstances", "ec2:StartInstances"]
         Resource = "*"
       },
       {
         Effect   = "Allow"
         Action   = ["sns:Publish"]
-        Resource = aws_sns_topic.alerts.arn
+        Resource = var.sns_topic_arn
       },
       {
         Effect   = "Allow"

@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechStream — Self-Healing Dashboard</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --green:     #3fb950;
+      --yellow:    #d29922;
+      --red:       #f85149;
+      --blue:      #58a6ff;
+      --purple:    #bc8cff;
+      --cyan:      #39d353;
+      --accent:    #1f6feb;
+    }
+    html { font-size: 14px; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; }
+    .topbar-brand .logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .topbar-brand h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.3px; }
+    .topbar-brand span { color: var(--muted); font-size: 0.8rem; margin-left: 4px; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .refresh-badge {
+      font-size: 0.75rem; color: var(--muted);
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 3px 10px; border-radius: 20px;
+    }
+
+    .main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+
+    /* ── Signal cards ─────────────────────────────────────────── */
+    .signals-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .signals-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 500px) { .signals-grid { grid-template-columns: 1fr; } }
+
+    .signal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .signal-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .signal-card.latency::before  { background: var(--blue); }
+    .signal-card.traffic::before  { background: var(--cyan); }
+    .signal-card.errors::before   { background: var(--red); }
+    .signal-card.saturation::before { background: var(--yellow); }
+
+    .signal-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .signal-value {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .signal-card.latency  .signal-value { color: var(--blue); }
+    .signal-card.traffic  .signal-value { color: var(--cyan); }
+    .signal-card.errors   .signal-value { color: var(--red); }
+    .signal-card.saturation .signal-value { color: var(--yellow); }
+
+    .signal-sub { font-size: 0.78rem; color: var(--muted); }
+    .signal-status {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .ok    { background: rgba(63,185,80,.15); color: var(--green); }
+    .warn  { background: rgba(210,153,34,.15); color: var(--yellow); }
+    .crit  { background: rgba(248,81,73,.15);  color: var(--red); }
+
+    /* ── Content grid ─────────────────────────────────────────── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 768px) { .content-grid { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title { font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+    .panel-body { padding: 20px; }
+
+    /* ── Tables ───────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      text-align: left; padding: 8px 12px;
+      color: var(--muted); font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(48,54,61,.5); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 0.7rem; font-weight: 600;
+    }
+    .badge-green { background: rgba(63,185,80,.15); color: var(--green); }
+    .badge-red   { background: rgba(248,81,73,.15);  color: var(--red); }
+    .badge-blue  { background: rgba(88,166,255,.15); color: var(--blue); }
+    .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; }
+
+    /* ── Chaos panel ──────────────────────────────────────────── */
+    .chaos-panel { grid-column: 1 / -1; }
+    .chaos-active { border-color: var(--red) !important; }
+    .chaos-active .panel-header { background: rgba(248,81,73,.08); }
+
+    .chaos-controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .control-group label {
+      display: block; font-size: 0.75rem; color: var(--muted);
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .control-group input[type=range] {
+      width: 100%; accent-color: var(--accent);
+    }
+    .control-group .range-val {
+      font-size: 0.85rem; color: var(--text); font-weight: 600;
+      margin-top: 4px;
+    }
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px;
+    }
+    .toggle-label { font-size: 0.85rem; font-weight: 500; }
+    .toggle-sub   { font-size: 0.75rem; color: var(--muted); }
+    .toggle {
+      position: relative; display: inline-block;
+      width: 44px; height: 24px; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: var(--border); border-radius: 24px;
+      cursor: pointer; transition: .3s;
+    }
+    .slider::before {
+      content: ''; position: absolute;
+      width: 18px; height: 18px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%; transition: .3s;
+    }
+    input:checked + .slider { background: var(--red); }
+    input:checked + .slider::before { transform: translateX(20px); }
+
+    .btn {
+      border: none; border-radius: 8px; padding: 10px 20px;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:active { transform: scale(.97); }
+    .btn-red    { background: var(--red);    color: white; }
+    .btn-green  { background: var(--green);  color: #0d1117; }
+    .btn-blue   { background: var(--accent); color: white; }
+    .btn-muted  { background: var(--border); color: var(--text); }
+    .btn-row    { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ── Alerts ───────────────────────────────────────────────── */
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px; border-radius: 8px; margin-bottom: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+    }
+    .alert-item.firing { border-color: var(--red); background: rgba(248,81,73,.06); }
+    .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+    .alert-dot.firing { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 1s infinite; }
+    .alert-dot.inactive { background: var(--muted); }
+    .alert-name { font-weight: 600; font-size: 0.85rem; }
+    .alert-desc { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    .footer {
+      text-align: center; color: var(--muted); font-size: 0.75rem;
+      padding: 24px; border-top: 1px solid var(--border); margin-top: 8px;
+    }
+    .footer a { color: var(--blue); text-decoration: none; }
+    .links-row {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .ext-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px;
+      font-size: 0.8rem; color: var(--text); text-decoration: none;
+      transition: border-color .2s;
+    }
+    .ext-link:hover { border-color: var(--accent); }
+    .spinner {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid var(--border); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 18px;
+      font-size: 0.85rem; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      transform: translateY(80px); opacity: 0;
+      transition: all .3s; z-index: 999;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<nav class="topbar">
+  <div class="topbar-brand">
+    <div class="logo">⚡</div>
+    <h1>TechStream<span>Self-Healing Platform</span></h1>
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot" id="appDot" title="App status"></div>
+    <span class="refresh-badge">Auto-refresh <span id="countdown">10</span>s</span>
+    <a class="ext-link" href="/metrics" target="_blank">Metrics</a>
+    <a class="ext-link" href="http://localhost:3000" target="_blank">📊 Grafana</a>
+    <a class="ext-link" href="http://localhost:9090" target="_blank">🔥 Prometheus</a>
+  </div>
+</nav>
+
+<main class="main">
+
+  <!-- Golden Signals -->
+  <div class="signals-grid">
+    <div class="signal-card latency">
+      <div class="signal-label">⏱ Latency (P99)</div>
+      <div class="signal-value" id="sig-latency">—</div>
+      <div class="signal-sub">P50: <span id="sig-latency-p50">—</span></div>
+      <div><span class="signal-status ok" id="sig-latency-badge">OK</span></div>
+    </div>
+    <div class="signal-card traffic">
+      <div class="signal-label">📈 Traffic</div>
+      <div class="signal-value" id="sig-traffic">—</div>
+      <div class="signal-sub">Active: <span id="sig-active">—</span> in-flight</div>
+      <div><span class="signal-status ok" id="sig-traffic-badge">LIVE</span></div>
+    </div>
+    <div class="signal-card errors">
+      <div class="signal-label">🔴 Error Rate</div>
+      <div class="signal-value" id="sig-errors">—</div>
+      <div class="signal-sub">Threshold: 5%</div>
+      <div><span class="signal-status ok" id="sig-errors-badge">OK</span></div>
+    </div>
+    <div class="signal-card saturation">
+      <div class="signal-label">⚙ Saturation</div>
+      <div class="signal-value" id="sig-cpu">—</div>
+      <div class="signal-sub">Memory: <span id="sig-mem">—</span></div>
+      <div><span class="signal-status ok" id="sig-sat-badge">OK</span></div>
+    </div>
+  </div>
+
+  <!-- Content grid -->
+  <div class="content-grid">
+
+    <!-- API Data -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">📦 API Data <span id="data-spinner"></span></span>
+        <button class="btn btn-muted" onclick="loadData()" style="padding:5px 12px;font-size:0.78rem;">Refresh</button>
+      </div>
+      <div class="panel-body" style="padding:0;overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>ID</th><th>Value</th><th>Status</th></tr></thead>
+          <tbody id="data-table"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Users -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">👥 Users <span id="users-spinner"></span></span>
+        <button class="btn btn-muted" onclick="loadUsers()" style="padding:5px 12px;font-size:0.78rem;">Refresh</button>
+      </div>
+      <div class="panel-body" style="padding:0;overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>Name</th><th>Status</th></tr></thead>
+          <tbody id="users-table"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">🔔 Alert Rules</span>
+        <span id="firing-count" class="badge badge-green">0 firing</span>
+      </div>
+      <div class="panel-body" id="alerts-list" style="max-height:280px;overflow-y:auto;">
+        <div style="color:var(--muted);text-align:center;padding:20px;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Health -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">🏥 System Health</span>
+      </div>
+      <div class="panel-body" style="padding:0;">
+        <table>
+          <thead><tr><th>Service</th><th>Status</th><th>Endpoint</th></tr></thead>
+          <tbody id="health-table">
+            <tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">Checking…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Chaos Control -->
+    <div class="panel chaos-panel" id="chaos-panel">
+      <div class="panel-header">
+        <span class="panel-title">💥 Chaos Control</span>
+        <span id="chaos-badge" class="badge badge-green">INACTIVE</span>
+      </div>
+      <div class="panel-body">
+        <div class="chaos-controls">
+
+          <div class="control-group">
+            <label>Error Rate</label>
+            <input type="range" id="error-rate" min="0" max="100" value="30"
+              oninput="document.getElementById('error-rate-val').textContent=this.value+'%'">
+            <div class="range-val"><span id="error-rate-val">30%</span> of requests → 500</div>
+          </div>
+
+          <div class="control-group">
+            <label>Latency Injection</label>
+            <input type="range" id="latency-ms" min="0" max="2000" step="50" value="500"
+              oninput="document.getElementById('latency-val').textContent=this.value+'ms'">
+            <div class="range-val"><span id="latency-val">500ms</span> added per request</div>
+          </div>
+
+          <div class="control-group" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">CPU Spike</div>
+                <div class="toggle-sub">Burn CPU on each request</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="cpu-spike">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Memory Hog</div>
+                <div class="toggle-sub">Allocate ~50 MB buffer</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="memory-hog">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-red" onclick="enableChaos()">💥 Enable Chaos</button>
+          <button class="btn btn-green" onclick="resetChaos()">✅ Reset (Heal)</button>
+          <button class="btn btn-blue" onclick="runScenario('errors')">Errors Only</button>
+          <button class="btn btn-blue" onclick="runScenario('latency')">Latency Only</button>
+          <button class="btn btn-muted" onclick="runScenario('cpu')">CPU Spike</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- External links -->
+  <div class="links-row">
+    <a class="ext-link" href="http://localhost:3000/d/techstream-golden-signals" target="_blank">📊 Golden Signals Dashboard</a>
+    <a class="ext-link" href="http://localhost:9090/alerts" target="_blank">🔥 Prometheus Alerts</a>
+    <a class="ext-link" href="http://localhost:9093" target="_blank">🔔 AlertManager</a>
+    <a class="ext-link" href="http://localhost:8080/history" target="_blank">🛠 Remediation History</a>
+    <a class="ext-link" href="/metrics" target="_blank">📈 Raw Metrics</a>
+  </div>
+
+</main>
+
+<div class="footer">
+  TechStream Self-Healing Platform &nbsp;·&nbsp;
+  <a href="https://github.com/AbrahamGyamfi/Self-healing" target="_blank">GitHub</a>
+  &nbsp;·&nbsp; Powered by Prometheus + Grafana + Claude AI
+</div>
+
+<div id="toast"></div>
+
+<script>
+  /* ── Utilities ───────────────────────────────────────────────── */
+  function showToast(msg, color='var(--green)') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.borderColor = color;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function spinner(id, on) {
+    document.getElementById(id).innerHTML = on
+      ? '<span class="spinner"></span>' : '';
+  }
+
+  async function apiFetch(url, opts={}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  /* ── Golden Signals ──────────────────────────────────────────── */
+  async function loadSignals() {
+    try {
+      const r = await apiFetch('/api/signals');
+      const e = r.errors, lat = r.latency, sat = r.saturation, trf = r.traffic;
+
+      document.getElementById('sig-latency').textContent =
+        lat.p99_ms >= 1000 ? (lat.p99_ms/1000).toFixed(2)+'s' : lat.p99_ms+'ms';
+      document.getElementById('sig-latency-p50').textContent = lat.p50_ms+'ms';
+
+      document.getElementById('sig-traffic').textContent = trf.rps.toFixed(1)+' rps';
+      document.getElementById('sig-active').textContent  = sat.active_requests;
+
+      document.getElementById('sig-errors').textContent =
+        (e.rate_pct).toFixed(1)+'%';
+
+      document.getElementById('sig-cpu').textContent = sat.cpu_pct.toFixed(0)+'%';
+      document.getElementById('sig-mem').textContent = sat.memory_mb.toFixed(0)+' MB';
+
+      // Badges
+      setSignalBadge('sig-latency-badge', lat.p99_ms, 500, 1000, 'ms');
+      setSignalBadge('sig-errors-badge',  e.rate_pct,   1,    5, '%');
+      setSignalBadge('sig-sat-badge',     sat.cpu_pct,  60,  80, '%');
+
+      document.getElementById('sig-traffic-badge').textContent =
+        trf.rps > 0 ? 'LIVE' : 'NO TRAFFIC';
+      document.getElementById('sig-traffic-badge').className =
+        'signal-status ' + (trf.rps > 0 ? 'ok' : 'warn');
+
+      // App dot
+      document.getElementById('appDot').style.background =
+        e.rate_pct > 5 ? 'var(--red)' : 'var(--green)';
+      document.getElementById('appDot').style.boxShadow =
+        e.rate_pct > 5 ? '0 0 6px var(--red)' : '0 0 6px var(--green)';
+    } catch(_) {}
+  }
+
+  function setSignalBadge(id, val, warn, crit, unit) {
+    const el = document.getElementById(id);
+    if (val >= crit)      { el.className='signal-status crit'; el.textContent=`CRITICAL (${val.toFixed(1)}${unit})`; }
+    else if (val >= warn) { el.className='signal-status warn'; el.textContent=`WARNING (${val.toFixed(1)}${unit})`; }
+    else                  { el.className='signal-status ok';   el.textContent='OK'; }
+  }
+
+  /* ── API Data ────────────────────────────────────────────────── */
+  async function loadData() {
+    spinner('data-spinner', true);
+    const tbody = document.getElementById('data-table');
+    try {
+      const r = await apiFetch('/api/data');
+      tbody.innerHTML = r.records.slice(0,8).map((rec,i) => `
+        <tr>
+          <td class="mono" style="color:var(--muted)">${i+1}</td>
+          <td class="mono">${rec.id}</td>
+          <td class="mono">${rec.value.toFixed(4)}</td>
+          <td><span class="badge badge-green">200 OK</span></td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">
+        <span class="badge badge-red">Error — ${e.message}</span></td></tr>`;
+    }
+    spinner('data-spinner', false);
+  }
+
+  /* ── Users ───────────────────────────────────────────────────── */
+  async function loadUsers() {
+    spinner('users-spinner', true);
+    const tbody = document.getElementById('users-table');
+    try {
+      const r = await apiFetch('/api/users');
+      tbody.innerHTML = r.users.map((u,i) => `
+        <tr>
+          <td class="mono" style="color:var(--muted)">${i+1}</td>
+          <td>${u.name}</td>
+          <td><span class="badge ${u.active?'badge-green':'badge-red'}">
+            ${u.active ? 'Active' : 'Inactive'}</span></td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;">
+        <span class="badge badge-red">Error — ${e.message}</span></td></tr>`;
+    }
+    spinner('users-spinner', false);
+  }
+
+  /* ── Alerts ──────────────────────────────────────────────────── */
+  async function loadAlerts() {
+    try {
+      const r = await apiFetch('/api/alerts');
+      const list = document.getElementById('alerts-list');
+      const firing = r.alerts.filter(a => a.state === 'firing').length;
+      document.getElementById('firing-count').textContent = `${firing} firing`;
+      document.getElementById('firing-count').className =
+        'badge ' + (firing > 0 ? 'badge-red' : 'badge-green');
+
+      list.innerHTML = r.alerts.map(a => `
+        <div class="alert-item ${a.state}">
+          <div class="alert-dot ${a.state}"></div>
+          <div>
+            <div class="alert-name">${a.name}</div>
+            <div class="alert-desc">${a.description || a.state}</div>
+          </div>
+        </div>`).join('') || '<div style="color:var(--muted);text-align:center;padding:20px;">No alerts configured</div>';
+    } catch(_) {}
+  }
+
+  /* ── Health table ────────────────────────────────────────────── */
+  async function loadHealth() {
+    const services = [
+      { name: 'TechStream API', url: '/health', ext: 'localhost:5000' },
+      { name: 'Prometheus',     url: 'http://localhost:9090/-/healthy', ext: 'localhost:9090' },
+      { name: 'Grafana',        url: 'http://localhost:3000/api/health', ext: 'localhost:3000' },
+      { name: 'AlertManager',   url: 'http://localhost:9093/-/healthy', ext: 'localhost:9093' },
+      { name: 'Remediation',    url: 'http://localhost:8080/health', ext: 'localhost:8080' },
+    ];
+    const rows = await Promise.all(services.map(async s => {
+      let ok = false;
+      try { await fetch(s.url, {signal: AbortSignal.timeout(2000)}); ok = true; } catch(_) {}
+      return `<tr>
+        <td>${s.name}</td>
+        <td><span class="badge ${ok?'badge-green':'badge-red'}">${ok?'UP':'DOWN'}</span></td>
+        <td class="mono" style="color:var(--muted);font-size:0.75rem">${s.ext}</td>
+      </tr>`;
+    }));
+    document.getElementById('health-table').innerHTML = rows.join('');
+  }
+
+  /* ── Chaos ───────────────────────────────────────────────────── */
+  async function loadChaosState() {
+    try {
+      const r = await apiFetch('/chaos');
+      const panel = document.getElementById('chaos-panel');
+      const badge = document.getElementById('chaos-badge');
+      if (r.enabled) {
+        panel.classList.add('chaos-active');
+        badge.className = 'badge badge-red';
+        badge.textContent = 'ACTIVE';
+      } else {
+        panel.classList.remove('chaos-active');
+        badge.className = 'badge badge-green';
+        badge.textContent = 'INACTIVE';
+      }
+      document.getElementById('error-rate').value = Math.round(r.error_rate * 100);
+      document.getElementById('error-rate-val').textContent = Math.round(r.error_rate * 100) + '%';
+      document.getElementById('latency-ms').value = r.latency_ms;
+      document.getElementById('latency-val').textContent = r.latency_ms + 'ms';
+      document.getElementById('cpu-spike').checked = r.cpu_spike;
+      document.getElementById('memory-hog').checked = r.memory_hog;
+    } catch(_) {}
+  }
+
+  async function enableChaos() {
+    const payload = {
+      enabled: true,
+      error_rate: document.getElementById('error-rate').value / 100,
+      latency_ms: parseInt(document.getElementById('latency-ms').value),
+      cpu_spike:  document.getElementById('cpu-spike').checked,
+      memory_hog: document.getElementById('memory-hog').checked,
+    };
+    try {
+      await apiFetch('/chaos', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      showToast('💥 Chaos enabled!', 'var(--red)');
+      loadChaosState();
+    } catch(e) { showToast('Error: ' + e.message, 'var(--red)'); }
+  }
+
+  async function resetChaos() {
+    try {
+      await apiFetch('/chaos/reset', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      showToast('✅ Chaos reset — system healing', 'var(--green)');
+      loadChaosState();
+    } catch(e) { showToast('Error: ' + e.message, 'var(--red)'); }
+  }
+
+  async function runScenario(scenario) {
+    const configs = {
+      errors:  { enabled:true, error_rate:0.30, latency_ms:0,   cpu_spike:false },
+      latency: { enabled:true, error_rate:0.0,  latency_ms:700, cpu_spike:false },
+      cpu:     { enabled:true, error_rate:0.0,  latency_ms:0,   cpu_spike:true  },
+    };
+    try {
+      await apiFetch('/chaos', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(configs[scenario]) });
+      showToast(`💥 ${scenario} scenario active`, 'var(--yellow)');
+      loadChaosState();
+    } catch(e) { showToast('Error: ' + e.message, 'var(--red)'); }
+  }
+
+  /* ── Auto-refresh ────────────────────────────────────────────── */
+  function refreshAll() {
+    loadSignals();
+    loadData();
+    loadUsers();
+    loadAlerts();
+    loadChaosState();
+    loadHealth();
+  }
+
+  let countdown = 10;
+  function tick() {
+    document.getElementById('countdown').textContent = countdown;
+    if (countdown <= 0) { countdown = 10; refreshAll(); }
+    else countdown--;
+  }
+
+  refreshAll();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
