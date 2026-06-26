@@ -20,7 +20,6 @@ resource "aws_lambda_function" "remediation" {
       ASG_NAME          = var.asg_name
       SNS_TOPIC_ARN     = var.sns_topic_arn
       SCALE_OUT_ENABLED = "true"
-      AWS_REGION        = var.aws_region
     }
   }
   tags = { Function = "auto-remediation" }

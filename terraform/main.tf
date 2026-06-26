@@ -74,6 +74,7 @@ module "eventbridge" {
 module "monitoring" {
   source               = "./modules/monitoring"
   prefix               = var.prefix
+  aws_region           = var.aws_region
   sns_topic_arn        = module.networking.sns_topic_arn
   asg_name             = module.compute.asg_name
   remediation_rule_arn = module.eventbridge.remediation_rule_arn

@@ -6,3 +6,5 @@ asg_min_size         = 1
 asg_max_size         = 4
 asg_desired_capacity = 1
 enable_devops_guru   = true
+your_ip_cidr         = "196.61.44.164/32"
+alert_email          = "abraham.gyamfi@amalitechtraining.org"

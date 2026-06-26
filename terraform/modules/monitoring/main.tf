@@ -6,6 +6,7 @@ resource "aws_cloudwatch_dashboard" "golden_signals" {
         type = "metric"
         properties = {
           title       = "Error Rate"
+          region      = var.aws_region
           period      = 60
           stat        = "Average"
           metrics     = [["TechStream/Application", "ErrorRate"]]
@@ -16,6 +17,7 @@ resource "aws_cloudwatch_dashboard" "golden_signals" {
         type = "metric"
         properties = {
           title              = "P99 Request Latency (ms)"
+          region             = var.aws_region
           period             = 60
           extended_statistic = "p99"
           metrics            = [["TechStream/Application", "RequestLatency"]]
@@ -26,6 +28,7 @@ resource "aws_cloudwatch_dashboard" "golden_signals" {
         type = "metric"
         properties = {
           title   = "Traffic (Requests/min)"
+          region  = var.aws_region
           period  = 60
           stat    = "Sum"
           metrics = [["TechStream/Application", "RequestCount"]]
@@ -35,6 +38,7 @@ resource "aws_cloudwatch_dashboard" "golden_signals" {
         type = "metric"
         properties = {
           title       = "CPU Saturation (%)"
+          region      = var.aws_region
           period      = 60
           stat        = "Average"
           metrics     = [["CWAgent", "cpu_usage_active", "AutoScalingGroupName", "${var.asg_name}"]]
@@ -56,7 +60,7 @@ resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
   period              = 60
   statistic           = "Average"
   treat_missing_data  = "notBreaching"
-  alarm_actions       = [var.sns_topic_arn, var.remediation_rule_arn]
+  alarm_actions       = [var.sns_topic_arn]
   ok_actions          = [var.sns_topic_arn]
   tags                = { Signal = "errors" }
 }
