@@ -136,10 +136,10 @@ jobs:
               "set -e",
               "cd /opt/techstream",
               "git pull origin main",
-              "docker-compose pull --quiet 2>/dev/null || true",
-              "docker-compose up -d --build --remove-orphans",
+              "docker compose pull --quiet 2>/dev/null || true",
+              "docker compose up -d --build --remove-orphans",
               "echo --- container status ---",
-              "docker-compose ps"
+              "docker compose ps"
             ]' \
             --timeout-seconds 300 \
             --query 'Command.CommandId' \
