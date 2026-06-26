@@ -170,7 +170,18 @@ def api_alerts():
 
 @app.route("/health")
 def health():
-    return jsonify(status="healthy", chaos_mode=chaos["enabled"])
+    proc = psutil.Process()
+    return jsonify(
+        status="healthy",
+        version="1.0.0",
+        uptime_seconds=round(time.time() - _START_TIME, 1),
+        chaos_mode=chaos["enabled"],
+        system=dict(
+            cpu_pct=round(proc.cpu_percent(interval=None), 1),
+            memory_mb=round(proc.memory_info().rss / 1e6, 1),
+            threads=proc.num_threads(),
+        ),
+    )
 
 
 @app.route("/api/data")
@@ -229,9 +240,18 @@ def get_chaos():
 @app.route("/chaos", methods=["POST"])
 def set_chaos():
     data = request.get_json(silent=True) or {}
+
+    error_rate = data.get("error_rate", chaos["error_rate"])
+    latency_ms = data.get("latency_ms", chaos["latency_ms"])
+
+    if not (0.0 <= float(error_rate) <= 1.0):
+        return jsonify(error="error_rate must be between 0.0 and 1.0"), 400
+    if int(latency_ms) < 0:
+        return jsonify(error="latency_ms must be >= 0"), 400
+
     chaos["enabled"] = bool(data.get("enabled", chaos["enabled"]))
-    chaos["error_rate"] = float(data.get("error_rate", chaos["error_rate"]))
-    chaos["latency_ms"] = int(data.get("latency_ms", chaos["latency_ms"]))
+    chaos["error_rate"] = float(error_rate)
+    chaos["latency_ms"] = int(latency_ms)
     chaos["cpu_spike"] = bool(data.get("cpu_spike", chaos["cpu_spike"]))
     chaos["memory_hog"] = bool(data.get("memory_hog", chaos["memory_hog"]))
     if not chaos["memory_hog"]:

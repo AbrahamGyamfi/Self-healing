@@ -32,12 +32,17 @@ ASG_NAME = os.environ.get("ASG_NAME", "")
 SSM_DOCUMENT = os.environ.get("SSM_DOCUMENT", "AWS-RunShellScript")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN", "")
 SCALE_OUT_ENABLED = os.environ.get("SCALE_OUT_ENABLED", "false").lower() == "true"
-REGION = os.environ.get("AWS_REGION", "us-east-1")
+REGION = os.environ.get("AWS_REGION", "eu-west-1")
 
-ec2 = boto3.client("ec2", region_name=REGION)
-ssm = boto3.client("ssm", region_name=REGION)
-asg = boto3.client("autoscaling", region_name=REGION)
-sns = boto3.client("sns", region_name=REGION)
+# Lazy-initialized clients — avoids credential errors at import time and
+# allows connection reuse across warm Lambda invocations.
+_clients: dict = {}
+
+
+def _client(service: str):
+    if service not in _clients:
+        _clients[service] = boto3.client(service, region_name=REGION)
+    return _clients[service]
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +52,7 @@ sns = boto3.client("sns", region_name=REGION)
 def restart_service_via_ssm(instance_id: str) -> dict:
     """Run `systemctl restart techstream` on the instance via SSM."""
     log.info("SSM: restarting techstream service on %s", instance_id)
-    resp = ssm.send_command(
+    resp = _client("ssm").send_command(
         InstanceIds=[instance_id],
         DocumentName=SSM_DOCUMENT,
         Parameters={
@@ -65,7 +70,8 @@ def restart_service_via_ssm(instance_id: str) -> dict:
 
 def scale_out_asg(asg_name: str, increment: int = 1) -> dict:
     """Increase the desired capacity of the ASG by `increment`."""
-    resp = asg.describe_auto_scaling_groups(AutoScalingGroupNames=[asg_name])
+    asg_client = _client("autoscaling")
+    resp = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg_name])
     groups = resp.get("AutoScalingGroups", [])
     if not groups:
         return {"action": "scale_out_asg", "error": f"ASG {asg_name!r} not found"}
@@ -75,7 +81,7 @@ def scale_out_asg(asg_name: str, increment: int = 1) -> dict:
     new_desired = min(current + increment, maximum)
     if new_desired == current:
         return {"action": "scale_out_asg", "skipped": "already at max capacity", "current": current}
-    asg.set_desired_capacity(AutoScalingGroupName=asg_name, DesiredCapacity=new_desired)
+    asg_client.set_desired_capacity(AutoScalingGroupName=asg_name, DesiredCapacity=new_desired)
     log.info("ASG %s: scaled from %d → %d", asg_name, current, new_desired)
     return {"action": "scale_out_asg", "previous_desired": current, "new_desired": new_desired}
 
@@ -84,7 +90,7 @@ def notify_sns(subject: str, body: dict) -> None:
     if not SNS_TOPIC_ARN:
         return
     try:
-        sns.publish(
+        _client("sns").publish(
             TopicArn=SNS_TOPIC_ARN,
             Subject=subject,
             Message=json.dumps(body, indent=2, default=str),

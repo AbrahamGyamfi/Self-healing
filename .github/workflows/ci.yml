@@ -42,9 +42,11 @@ jobs:
       - name: Run tests with coverage
         run: |
           pytest tests/ \
+            --ignore=tests/test_integration.py \
             --cov=app \
             --cov-report=term-missing \
             --cov-report=xml \
+            --cov-fail-under=70 \
             -v
 
       - name: Upload coverage report

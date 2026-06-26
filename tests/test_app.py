@@ -21,6 +21,21 @@ class TestHealth:
         data = app_client.get("/health").get_json()
         assert data["chaos_mode"] is False
 
+    def test_version_field(self, app_client):
+        data = app_client.get("/health").get_json()
+        assert "version" in data
+
+    def test_uptime_field(self, app_client):
+        data = app_client.get("/health").get_json()
+        assert "uptime_seconds" in data
+        assert data["uptime_seconds"] >= 0
+
+    def test_system_metrics_present(self, app_client):
+        data = app_client.get("/health").get_json()
+        assert "system" in data
+        assert "cpu_pct" in data["system"]
+        assert "memory_mb" in data["system"]
+
 
 class TestApiData:
     def test_returns_200_in_normal_mode(self, app_client):
@@ -109,6 +124,26 @@ class TestChaosControl:
         app_client.post("/chaos", json={"enabled": True, "memory_hog": True})
         state = app_client.get("/chaos").get_json()
         assert state["memory_hog"] is True
+
+    def test_rejects_error_rate_above_1(self, app_client):
+        resp = app_client.post("/chaos", json={"error_rate": 1.5})
+        assert resp.status_code == 400
+
+    def test_rejects_negative_error_rate(self, app_client):
+        resp = app_client.post("/chaos", json={"error_rate": -0.1})
+        assert resp.status_code == 400
+
+    def test_rejects_negative_latency(self, app_client):
+        resp = app_client.post("/chaos", json={"latency_ms": -100})
+        assert resp.status_code == 400
+
+    def test_accepts_boundary_error_rate_zero(self, app_client):
+        resp = app_client.post("/chaos", json={"error_rate": 0.0})
+        assert resp.status_code == 200
+
+    def test_accepts_boundary_error_rate_one(self, app_client):
+        resp = app_client.post("/chaos", json={"error_rate": 1.0})
+        assert resp.status_code == 200
 
 
 class TestMetrics:
