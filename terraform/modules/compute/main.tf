@@ -29,6 +29,9 @@ resource "aws_launch_template" "app" {
     curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
       -o /usr/local/lib/docker/cli-plugins/docker-compose
     chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    curl -SL https://github.com/docker/buildx/releases/download/v0.19.3/buildx-v0.19.3.linux-amd64 \
+      -o /usr/local/lib/docker/cli-plugins/docker-buildx
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
     dnf install -y amazon-cloudwatch-agent
     git clone https://github.com/AbrahamGyamfi/Self-healing.git /opt/techstream
     cd /opt/techstream && docker compose up -d

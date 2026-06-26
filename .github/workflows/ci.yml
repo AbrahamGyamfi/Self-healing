@@ -134,6 +134,8 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "set -e",
+              "curl -SL https://github.com/docker/buildx/releases/download/v0.19.3/buildx-v0.19.3.linux-amd64 -o /usr/local/lib/docker/cli-plugins/docker-buildx",
+              "chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx",
               "cd /opt/techstream",
               "git pull origin main",
               "docker compose pull --quiet 2>/dev/null || true",
