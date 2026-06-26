@@ -15,8 +15,12 @@ def app_client():
 
 
 @pytest.fixture(autouse=True)
-def reset_chaos(app_client):
-    """Ensure chaos is off before and after every test."""
-    app_client.post("/chaos/reset", json={})
+def reset_chaos(request):
+    """Reset chaos state before/after every test that uses the Flask client."""
+    if "app_client" not in request.fixturenames:
+        yield
+        return
+    client = request.getfixturevalue("app_client")
+    client.post("/chaos/reset", json={})
     yield
-    app_client.post("/chaos/reset", json={})
+    client.post("/chaos/reset", json={})

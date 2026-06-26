@@ -208,43 +208,133 @@ aws devops-guru list-insights --status-filter type=ONGOING \
 
 ```
 Self-healing/
-├── app/                      # Flask application
-│   ├── app.py                # API server with Prometheus metrics + chaos toggle
+├── app/                          # Flask application
+│   ├── app.py                    # API + Prometheus metrics + chaos toggle
 │   ├── Dockerfile
 │   ├── requirements.txt
-│   └── wsgi.py
+│   ├── wsgi.py
+│   └── templates/index.html      # Dark-theme dashboard UI
 ├── monitoring/
 │   ├── prometheus/
-│   │   ├── prometheus.yml    # Scrape config (app, node-exporter, cAdvisor)
-│   │   └── alert_rules.yml   # Golden Signal alert rules
+│   │   ├── prometheus.yml        # Scrape config (app, node-exporter, cAdvisor)
+│   │   └── alert_rules.yml       # Golden Signal alert rules (5 rules, 2 groups)
 │   ├── grafana/
 │   │   └── provisioning/
-│   │       ├── datasources/  # Auto-wired Prometheus datasource
-│   │       └── dashboards/   # Golden Signals dashboard (auto-provisioned)
+│   │       ├── datasources/      # Auto-wired Prometheus datasource (uid: prometheus)
+│   │       └── dashboards/       # Golden Signals dashboard (auto-provisioned)
 │   └── alertmanager/
-│       └── alertmanager.yml  # Routes critical alerts to remediation webhook
+│       └── alertmanager.yml      # Routes critical alerts → remediation webhook
 ├── chaos/
-│   └── chaos_script.py       # Injects errors / latency / CPU / memory
+│   └── chaos_script.py           # 6 scenarios: errors/latency/cpu/memory/load/full
 ├── remediation/
-│   ├── webhook_handler.py    # HTTP server — receives alerts, executes healing
-│   ├── lambda_remediation.py # AWS Lambda variant (EventBridge → SSM / ASG)
+│   ├── webhook_handler.py        # HTTP server: alerts → chaos reset → container restart
+│   ├── lambda_remediation.py     # AWS Lambda variant: EventBridge → SSM / ASG scale-out
 │   └── Dockerfile
 ├── ai_analysis/
-│   ├── analyze.py            # Claude API — DevOps Guru-style RCA report
-│   └── root_cause_analyzer.py # stdlib fallback — Z-score + causal chain
+│   ├── analyze.py                # Claude API (claude-sonnet-4-6) — DevOps Guru-style RCA
+│   └── root_cause_analyzer.py   # stdlib fallback — Z-score + IQR + causal chain
 ├── terraform/
-│   ├── main.tf               # VPC, networking, SNS
-│   ├── ec2.tf                # Launch template, ALB, ASG
-│   ├── cloudwatch.tf         # Dashboard + alarms
-│   ├── lambda.tf             # Remediation Lambda
-│   ├── eventbridge.tf        # Alarm → Lambda routing
-│   ├── iam.tf                # Roles + policies
-│   └── devops_guru.tf        # Amazon DevOps Guru
+│   ├── main.tf                   # Root module — wires all child modules
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── terraform.tfvars          # Active deployment values
+│   ├── terraform.tfvars.example  # Template for new deployments
+│   └── modules/
+│       ├── networking/           # VPC, subnets, IGW, SG, SNS
+│       ├── iam/                  # EC2 role + Lambda role (least-privilege)
+│       ├── compute/              # Launch Template, ALB, ASG
+│       ├── lambda/               # Remediation function + log group
+│       ├── eventbridge/          # Alarm routing rule + AI analysis schedule
+│       ├── monitoring/           # CloudWatch dashboard + 3 alarms
+│       └── devops_guru/          # ML anomaly detection (tag-scoped)
+├── tests/
+│   ├── conftest.py               # Shared fixtures (Flask test client, chaos reset)
+│   ├── test_app.py               # 24 Flask endpoint unit tests
+│   ├── test_remediation.py       # 11 webhook service tests (mocked Docker)
+│   ├── test_chaos.py             # 13 chaos script tests (Stats, Scenarios)
+│   └── requirements.txt
+├── docs/
+│   └── cost-analysis.md          # Itemised AWS cost breakdown + optimisation notes
 ├── scripts/
-│   ├── deploy_local.sh       # docker compose up + health check
-│   ├── run_demo.sh           # Full incident demo (chaos + AI analysis)
-│   └── cleanup.sh            # docker compose down -v
-└── docker-compose.yml        # Full local stack
+│   ├── deploy_local.sh           # docker compose up + health check
+│   ├── run_demo.sh               # Full incident demo (chaos + AI analysis)
+│   └── cleanup.sh                # docker compose down -v
+├── .github/workflows/ci.yml      # CI: lint → test → terraform validate → docker build
+├── pytest.ini
+└── docker-compose.yml            # 7-service local stack
+```
+
+---
+
+## Architecture Decision Records
+
+### ADR-001: Flask over FastAPI
+**Decision**: Use Flask with `prometheus_client` for the application server.  
+**Reason**: `prometheus_client` provides a WSGI middleware that integrates directly with Flask via `make_wsgi_app()`, giving zero-overhead metric exposition. FastAPI requires an async bridge. Flask is also simpler to instrument for chaos injection (global state dict).
+
+### ADR-002: Webhook-based remediation over direct Prometheus integration
+**Decision**: AlertManager calls the remediation service via HTTP webhook, rather than having the remediator poll Prometheus.  
+**Reason**: AlertManager already handles deduplication, grouping, silence, and inhibition. Re-implementing those in a poller would duplicate work and introduce race conditions. The webhook pattern also allows manual testing with a single `curl`.
+
+### ADR-003: Modular Terraform over a single flat configuration
+**Decision**: Split AWS resources across 7 child modules (`networking`, `iam`, `compute`, `lambda`, `eventbridge`, `monitoring`, `devops_guru`).  
+**Reason**: Flat files make `terraform plan` output unreadable at scale, and blast radius of a change is unbounded. Modules enforce explicit input/output contracts, allow independent `terraform destroy -target`, and make the IAM/networking separation obvious for security reviews.
+
+### ADR-004: Claude API for RCA over a rules-based engine
+**Decision**: Use `claude-sonnet-4-6` for root cause analysis when an API key is available, with a Z-score/IQR statistical fallback.  
+**Reason**: Rules-based RCA requires enumerating every failure mode upfront. LLMs can correlate across all four Golden Signals simultaneously and generate actionable remediation steps in natural language — matching what DevOps Guru's ML service does, but available locally without AWS.
+
+### ADR-005: Tag-scoped DevOps Guru over full-account monitoring
+**Decision**: Scope DevOps Guru's resource collection to `Project=TechStream-SelfHealing` tag.  
+**Reason**: Full-account DevOps Guru monitoring scales cost with the number of resources. Tag-scoping constrains cost to exactly the resources under test (~$7/month) and avoids noisy cross-project insights.
+
+---
+
+## Runbook
+
+### Alert: HighErrorRate (HTTP 5xx > 5%)
+
+1. **Check current chaos state**: `curl http://localhost:5000/chaos`
+2. **If chaos is active**: `curl -X POST http://localhost:5000/chaos/reset`
+3. **Check remediation history**: `curl http://localhost:8080/history`
+4. **Check container health**: `docker ps | grep techstream-app`
+5. **If container is unhealthy**: `docker restart techstream-app`
+6. **Run AI analysis**: `python3 ai_analysis/analyze.py` (requires `ANTHROPIC_API_KEY`)
+
+### Alert: HighLatencyP99 (P99 > 1 s)
+
+1. Check chaos latency: `curl http://localhost:5000/chaos | python3 -m json.tool`
+2. If `latency_ms > 0`: `curl -X POST http://localhost:5000/chaos/reset`
+3. Check node exporter: `curl http://localhost:9100/metrics | grep node_cpu`
+4. If host CPU is saturated: identify and kill the offending process or scale out
+
+### Alert: HighCpuSaturation (CPU > 80%)
+
+1. Check if CPU spike is chaos-injected: `curl http://localhost:5000/chaos`
+2. If `cpu_spike: true`: reset chaos as above
+3. If genuine: check `top` / `docker stats`; scale ASG if on AWS
+
+### Alert: AppContainerDown
+
+1. `docker ps -a | grep techstream-app` — get exit code
+2. `docker logs techstream-app --tail 50`
+3. `docker start techstream-app` or `docker compose up -d techstream-app`
+4. If recurring: check host memory (`free -m`) and disk (`df -h`)
+
+### Silence an alert during maintenance
+
+```bash
+# Via AlertManager UI at http://localhost:9093
+# Or via API:
+curl -X POST http://localhost:9093/api/v2/silences \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "matchers": [{"name": "alertname", "value": "HighErrorRate", "isRegex": false}],
+    "startsAt": "2026-01-01T00:00:00Z",
+    "endsAt": "2026-01-01T02:00:00Z",
+    "createdBy": "oncall",
+    "comment": "planned maintenance"
+  }'
 ```
 
 ---

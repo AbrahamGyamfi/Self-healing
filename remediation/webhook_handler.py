@@ -19,7 +19,7 @@ import subprocess
 import time
 import threading
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 logging.basicConfig(
@@ -44,7 +44,7 @@ _REMEDIATION_COOLDOWN = 60
 
 def _add_history(event: dict):
     with _history_lock:
-        _history.append({"timestamp": datetime.utcnow().isoformat() + "Z", **event})
+        _history.append({"timestamp": datetime.now(timezone.utc).isoformat(), **event})
         if len(_history) > 100:
             _history.pop(0)
 
