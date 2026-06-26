@@ -170,16 +170,26 @@ jobs:
           echo "Final status: $STATUS"
           [ "$STATUS" = "Success" ] || exit 1
 
-      - name: Smoke test — all Golden Signal endpoints
+      - name: Get instance public IP
+        id: ip
         run: |
-          ALB="http://techstream-alb-919462331.eu-west-1.elb.amazonaws.com"
-          echo "Waiting 20s for containers to stabilise..."
-          sleep 20
-          for i in $(seq 1 8); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$ALB/health" || echo "000")
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids "${{ steps.instance.outputs.id }}" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "public_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
+          echo "Instance public IP: $PUBLIC_IP"
+
+      - name: Smoke test — direct instance health check
+        run: |
+          BASE="http://${{ steps.ip.outputs.public_ip }}:5000"
+          echo "Waiting 30s for containers to stabilise..."
+          sleep 30
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check passed on attempt $i"
-              curl -s "$ALB/health" | python3 -m json.tool
+              curl -s "$BASE/health" | python3 -m json.tool
               exit 0
             fi
             echo "Attempt $i: HTTP $STATUS — retrying in 15s"

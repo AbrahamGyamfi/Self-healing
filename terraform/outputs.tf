@@ -1,6 +1,6 @@
 output "app_url" {
-  value       = "http://${module.compute.alb_dns_name}"
-  description = "TechStream application URL"
+  value       = "http://<instance-public-ip>:5000  # get IP: aws ec2 describe-instances --filters Name=tag:Name,Values=techstream-app --query 'Reservations[0].Instances[0].PublicIpAddress' --output text"
+  description = "TechStream application URL (direct instance, no ALB)"
 }
 
 output "cloudwatch_dashboard_url" {
