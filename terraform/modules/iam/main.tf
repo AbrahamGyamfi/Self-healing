@@ -56,17 +56,25 @@ resource "aws_iam_role_policy" "lambda_remediation_policy" {
     Statement = [
       {
         Effect = "Allow"
-        Action = ["ssm:SendCommand", "ssm:GetCommandInvocation"]
-        Resource = "*"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ssm:*:*:document/AWS-RunShellScript",
+          "arn:aws:ec2:*:*:instance/*"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation"]
+        Resource = "arn:aws:ssm:*:*:*"
       },
       {
         Effect = "Allow"
         Action = ["autoscaling:DescribeAutoScalingGroups", "autoscaling:SetDesiredCapacity"]
-        Resource = "*"
+        Resource = var.asg_arn != "" ? var.asg_arn : "*"
       },
       {
         Effect = "Allow"
-        Action = ["ec2:DescribeInstances", "ec2:StopInstances", "ec2:StartInstances"]
+        Action = ["ec2:DescribeInstances"]
         Resource = "*"
       },
       {

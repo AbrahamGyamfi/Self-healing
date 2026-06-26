@@ -39,6 +39,7 @@ module "iam" {
   source        = "./modules/iam"
   prefix        = var.prefix
   sns_topic_arn = module.networking.sns_topic_arn
+  asg_arn       = module.compute.asg_arn
 }
 
 module "compute" {
