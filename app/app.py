@@ -150,7 +150,6 @@ def api_signals():
 def api_alerts():
     """Proxy Prometheus alert rules for the dashboard."""
     import urllib.request as ur
-    import urllib.error
     prometheus_url = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
     try:
         with ur.urlopen(f"{prometheus_url}/api/v1/rules", timeout=3) as resp:

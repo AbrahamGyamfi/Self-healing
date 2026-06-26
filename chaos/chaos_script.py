@@ -189,7 +189,7 @@ def scenario_full(duration: int, workers: int):
       Phase 4         – remediation window (chaos off, observe recovery)
     """
     phase_duration = max(duration // 4, 10)
-    threads = _launch_workers(workers, ENDPOINTS)
+    _launch_workers(workers, ENDPOINTS)
 
     print("\n=== PHASE 1: Latency Spike ===")
     _enable_chaos({"enabled": True, "error_rate": 0.0, "latency_ms": 600})

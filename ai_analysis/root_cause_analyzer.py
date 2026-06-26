@@ -23,8 +23,9 @@ import math
 import os
 import statistics
 import time
+import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -97,7 +98,6 @@ def _query_prometheus(promql: str) -> Optional[float]:
     encoded = urllib.parse.quote(promql)
     url = f"{PROMETHEUS_URL}/api/v1/query?query={encoded}"
     try:
-        import urllib.parse
         url = f"{PROMETHEUS_URL}/api/v1/query?query={urllib.parse.quote(promql)}"
         with urllib.request.urlopen(url, timeout=10) as resp:
             data = json.loads(resp.read())
@@ -325,7 +325,7 @@ def _print_report(report: dict):
         report["overall_health"], "❓"
     )
     print(f"\n{'='*70}")
-    print(f"  TechStream Root Cause Analysis Report")
+    print("  TechStream Root Cause Analysis Report")
     print(f"  {report['analysis_timestamp']}")
     print(f"{'='*70}")
     print(f"  Overall Health : {health_emoji}  {report['overall_health'].upper()}")
