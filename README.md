@@ -111,30 +111,31 @@ python3 chaos/chaos_script.py --scenario load --workers 50 --duration 90
 
 ## AI Root Cause Analysis
 
-### Claude-powered (recommended)
+### Amazon DevOps Guru (primary — AWS deployment)
+
+After `terraform apply`, DevOps Guru monitors CloudWatch metrics and automatically detects anomalies using ML. Query its insights with:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-python3 ai_analysis/analyze.py --prometheus http://localhost:9090
-# Save full JSON report:
-python3 ai_analysis/analyze.py --output report.json
+python3 ai_analysis/analyze.py --region eu-west-1
+
+# Look back 48 hours and save report
+python3 ai_analysis/analyze.py --region eu-west-1 --hours 48 --output report.json
 ```
 
-Produces a structured RCA report with sections:
-- Anomaly Summary
-- Root Cause Analysis
-- Impact Assessment
-- Automated Remediation Actions
-- Recommended Follow-up (On-Call Engineer)
-- MTTR Estimate
+Produces a structured RCA report showing:
+- Ongoing and recently closed insights (severity: HIGH / MEDIUM / LOW)
+- Affected CloudWatch metrics per anomaly
+- ML-generated recommendations with links to AWS documentation
 
-### Statistical analyzer (no API key required)
+> **Note**: DevOps Guru needs 3–7 days of CloudWatch metric history to establish baselines before generating the first insights. Run the chaos script after deploying to accelerate anomaly detection.
+
+### Statistical analyser (local Docker — no AWS required)
 
 ```bash
 python3 ai_analysis/root_cause_analyzer.py --watch --interval 60
 ```
 
-Uses Z-score + IQR anomaly detection and causal-chain correlation.
+Uses Z-score + IQR anomaly detection against live Prometheus metrics. Used automatically by `run_demo.sh` when no AWS credentials are present.
 
 ---
 
@@ -254,12 +255,15 @@ Self-healing/
 │   ├── test_chaos.py             # 13 chaos script tests (Stats, Scenarios)
 │   └── requirements.txt
 ├── docs/
-│   └── cost-analysis.md          # Itemised AWS cost breakdown + optimisation notes
+│   ├── cost-analysis.md          # Itemised AWS cost breakdown + optimisation notes
+│   ├── monitoring.md             # Alert rules, PromQL reference, Grafana panels
+│   └── chaos-engineering.md      # All 6 chaos scenarios, expected alerts, verification
 ├── scripts/
 │   ├── deploy_local.sh           # docker compose up + health check
 │   ├── run_demo.sh               # Full incident demo (chaos + AI analysis)
 │   └── cleanup.sh                # docker compose down -v
 ├── .github/workflows/ci.yml      # CI: lint → test → terraform validate → docker build
+├── .env.example                      # Environment variable template
 ├── pytest.ini
 └── docker-compose.yml            # 7-service local stack
 ```
@@ -280,9 +284,9 @@ Self-healing/
 **Decision**: Split AWS resources across 7 child modules (`networking`, `iam`, `compute`, `lambda`, `eventbridge`, `monitoring`, `devops_guru`).  
 **Reason**: Flat files make `terraform plan` output unreadable at scale, and blast radius of a change is unbounded. Modules enforce explicit input/output contracts, allow independent `terraform destroy -target`, and make the IAM/networking separation obvious for security reviews.
 
-### ADR-004: Claude API for RCA over a rules-based engine
-**Decision**: Use `claude-sonnet-4-6` for root cause analysis when an API key is available, with a Z-score/IQR statistical fallback.  
-**Reason**: Rules-based RCA requires enumerating every failure mode upfront. LLMs can correlate across all four Golden Signals simultaneously and generate actionable remediation steps in natural language — matching what DevOps Guru's ML service does, but available locally without AWS.
+### ADR-004: Amazon DevOps Guru for RCA over a rules-based engine
+**Decision**: Use Amazon DevOps Guru as the primary AI/ML analysis layer when deployed on AWS, with a Z-score/IQR statistical fallback for local Docker runs.  
+**Reason**: DevOps Guru's ML models are pre-trained on AWS operational data across millions of deployments — no prompt engineering or API keys required. It integrates natively with CloudWatch metrics already emitted by the stack and produces structured insights with direct links to AWS remediation documentation. The stdlib fallback ensures the demo works fully offline without AWS credentials.
 
 ### ADR-005: Tag-scoped DevOps Guru over full-account monitoring
 **Decision**: Scope DevOps Guru's resource collection to `Project=TechStream-SelfHealing` tag.  

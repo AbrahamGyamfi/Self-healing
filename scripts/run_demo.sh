@@ -5,12 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 CHAOS="$ROOT/chaos/chaos_script.py"
-# Use the Claude-powered analyser if ANTHROPIC_API_KEY is set; fall back to stdlib version
-if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+# Use DevOps Guru if AWS credentials are available; fall back to stdlib analyser for local demo
+if aws sts get-caller-identity &>/dev/null 2>&1; then
   ANALYZER="$ROOT/ai_analysis/analyze.py"
+  echo "[INFO] AWS credentials found — using Amazon DevOps Guru for RCA"
 else
   ANALYZER="$ROOT/ai_analysis/root_cause_analyzer.py"
-  echo "[WARN] ANTHROPIC_API_KEY not set — using statistical analyser (no Claude API)"
+  echo "[WARN] No AWS credentials — using statistical analyser (stdlib fallback)"
+  echo "       To use DevOps Guru: configure AWS credentials and deploy Terraform first."
 fi
 
 APP_URL="${TARGET_URL:-http://localhost:5000}"
@@ -23,6 +25,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "  Target   : $APP_URL"
 echo "  Scenario : Full incident (latency → errors → CPU → recovery)"
+echo "  Analyser : $(basename "$ANALYZER")"
 echo ""
 echo "  Watch the Grafana dashboard as chaos is injected:"
 echo "  → http://localhost:3000  (admin / techstream123)"
