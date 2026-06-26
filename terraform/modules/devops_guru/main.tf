@@ -9,5 +9,5 @@ resource "aws_devopsguru_resource_collection" "techstream" {
 
 resource "aws_devopsguru_notification_channel" "alerts" {
   count = var.enable ? 1 : 0
-  sns   { topic_arn = var.sns_topic_arn }
+  sns { topic_arn = var.sns_topic_arn }
 }

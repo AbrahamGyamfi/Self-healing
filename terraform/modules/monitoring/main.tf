@@ -5,21 +5,21 @@ resource "aws_cloudwatch_dashboard" "golden_signals" {
       {
         type = "metric"
         properties = {
-          title   = "Error Rate"
-          period  = 60
-          stat    = "Average"
-          metrics = [["TechStream/Application", "ErrorRate"]]
+          title       = "Error Rate"
+          period      = 60
+          stat        = "Average"
+          metrics     = [["TechStream/Application", "ErrorRate"]]
           annotations = { horizontal = [{ value = 0.05, label = "5% threshold", color = "#ff0000" }] }
         }
       },
       {
         type = "metric"
         properties = {
-          title          = "P99 Request Latency (ms)"
-          period         = 60
+          title              = "P99 Request Latency (ms)"
+          period             = 60
           extended_statistic = "p99"
-          metrics        = [["TechStream/Application", "RequestLatency"]]
-          annotations    = { horizontal = [{ value = 1000, label = "1s threshold", color = "#ff9900" }] }
+          metrics            = [["TechStream/Application", "RequestLatency"]]
+          annotations        = { horizontal = [{ value = 1000, label = "1s threshold", color = "#ff9900" }] }
         }
       },
       {
@@ -34,10 +34,10 @@ resource "aws_cloudwatch_dashboard" "golden_signals" {
       {
         type = "metric"
         properties = {
-          title   = "CPU Saturation (%)"
-          period  = 60
-          stat    = "Average"
-          metrics = [["CWAgent", "cpu_usage_active", "AutoScalingGroupName", "${var.asg_name}"]]
+          title       = "CPU Saturation (%)"
+          period      = 60
+          stat        = "Average"
+          metrics     = [["CWAgent", "cpu_usage_active", "AutoScalingGroupName", "${var.asg_name}"]]
           annotations = { horizontal = [{ value = 80, label = "80% threshold", color = "#ff0000" }] }
         }
       }

@@ -1,7 +1,7 @@
-variable "prefix"               { type = string }
-variable "vpc_id"               { type = string }
-variable "subnet_ids"           { type = list(string) }
-variable "sg_id"                { type = string }
+variable "prefix" { type = string }
+variable "vpc_id" { type = string }
+variable "subnet_ids" { type = list(string) }
+variable "sg_id" { type = string }
 variable "instance_profile_arn" { type = string }
 variable "ec2_instance_type" {
   type    = string

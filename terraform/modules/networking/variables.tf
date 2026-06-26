@@ -1,4 +1,4 @@
-variable "prefix"     { type = string }
+variable "prefix" { type = string }
 variable "aws_region" { type = string }
 variable "your_ip_cidr" {
   type        = string

@@ -68,13 +68,13 @@ resource "aws_iam_role_policy" "lambda_remediation_policy" {
         Resource = "arn:aws:ssm:*:*:*"
       },
       {
-        Effect = "Allow"
-        Action = ["autoscaling:DescribeAutoScalingGroups", "autoscaling:SetDesiredCapacity"]
+        Effect   = "Allow"
+        Action   = ["autoscaling:DescribeAutoScalingGroups", "autoscaling:SetDesiredCapacity"]
         Resource = var.asg_arn != "" ? var.asg_arn : "*"
       },
       {
-        Effect = "Allow"
-        Action = ["ec2:DescribeInstances"]
+        Effect   = "Allow"
+        Action   = ["ec2:DescribeInstances"]
         Resource = "*"
       },
       {
