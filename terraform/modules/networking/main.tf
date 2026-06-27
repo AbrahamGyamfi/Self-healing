@@ -58,6 +58,34 @@ resource "aws_security_group" "app" {
     description = "TechStream API (direct)"
   }
   ingress {
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Prometheus"
+  }
+  ingress {
+    from_port   = 9093
+    to_port     = 9093
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "AlertManager"
+  }
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Grafana"
+  }
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Remediation webhook"
+  }
+  ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
