@@ -48,7 +48,7 @@ SEP = "=" * 68
 # ---------------------------------------------------------------------------
 
 def _client(region: str):
-    return boto3.client("devopsguru", region_name=region)
+    return boto3.client("devops-guru", region_name=region)
 
 
 def list_insights(client, hours: int) -> dict:
